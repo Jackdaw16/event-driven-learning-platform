@@ -34,3 +34,6 @@ build/
 
 ### OpenCode local instructions ###
 AGENTS.md
+
+.atl/
+.env
