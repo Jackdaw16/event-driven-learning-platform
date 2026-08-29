@@ -14,4 +14,8 @@ public record Instructor(UUID id, String name, String email, String biography) {
             throw new IllegalArgumentException("email must not be blank");
         }
     }
+
+    public Instructor reviseProfile(String name, String email, String biography) {
+        return new Instructor(id, name, email, biography);
+    }
 }
