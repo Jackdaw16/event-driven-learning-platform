@@ -7,14 +7,14 @@ import java.util.UUID;
 public final class Course {
 
     private final UUID id;
-    private final String title;
-    private final String description;
-    private final int estimatedDurationHours;
-    private final CourseLevel level;
-    private final Money price;
-    private final int maximumSeats;
-    private final UUID categoryId;
-    private final UUID instructorId;
+    private String title;
+    private String description;
+    private int estimatedDurationHours;
+    private CourseLevel level;
+    private Money price;
+    private int maximumSeats;
+    private UUID categoryId;
+    private UUID instructorId;
     private int occupiedSeats;
     private CourseStatus status;
 
@@ -29,26 +29,75 @@ public final class Course {
             UUID categoryId,
             UUID instructorId
     ) {
+        this(
+                id,
+                title,
+                description,
+                estimatedDurationHours,
+                level,
+                price,
+                maximumSeats,
+                0,
+                CourseStatus.DRAFT,
+                categoryId,
+                instructorId
+        );
+    }
+
+    private Course(
+            UUID id,
+            String title,
+            String description,
+            int estimatedDurationHours,
+            CourseLevel level,
+            Money price,
+            int maximumSeats,
+            int occupiedSeats,
+            CourseStatus status,
+            UUID categoryId,
+            UUID instructorId
+    ) {
         this.id = Objects.requireNonNull(id, "id must not be null");
-        if (title == null || title.isBlank()) {
-            throw new IllegalArgumentException("title must not be blank");
-        }
+        validateCourseDetails(title, estimatedDurationHours, level, price, maximumSeats, categoryId, instructorId);
+        validateOccupancy(occupiedSeats, maximumSeats, status);
         this.title = title;
         this.description = description;
-        if (estimatedDurationHours <= 0) {
-            throw new IllegalArgumentException("estimated duration hours must be positive");
-        }
         this.estimatedDurationHours = estimatedDurationHours;
-        this.level = Objects.requireNonNull(level, "level must not be null");
-        this.price = Objects.requireNonNull(price, "price must not be null");
-        if (maximumSeats <= 0) {
-            throw new IllegalArgumentException("maximum seats must be positive");
-        }
+        this.level = level;
+        this.price = price;
         this.maximumSeats = maximumSeats;
-        this.categoryId = Objects.requireNonNull(categoryId, "category id must not be null");
-        this.instructorId = Objects.requireNonNull(instructorId, "instructor id must not be null");
-        this.occupiedSeats = 0;
-        this.status = CourseStatus.DRAFT;
+        this.categoryId = categoryId;
+        this.instructorId = instructorId;
+        this.occupiedSeats = occupiedSeats;
+        this.status = status;
+    }
+
+    public static Course rehydrate(
+            UUID id,
+            String title,
+            String description,
+            int estimatedDurationHours,
+            CourseLevel level,
+            Money price,
+            int maximumSeats,
+            int occupiedSeats,
+            CourseStatus status,
+            UUID categoryId,
+            UUID instructorId
+    ) {
+        return new Course(
+                id,
+                title,
+                description,
+                estimatedDurationHours,
+                level,
+                price,
+                maximumSeats,
+                occupiedSeats,
+                status,
+                categoryId,
+                instructorId
+        );
     }
 
     public UUID id() {
@@ -95,6 +144,34 @@ public final class Course {
         return instructorId;
     }
 
+    public void revise(
+            String title,
+            String description,
+            int estimatedDurationHours,
+            CourseLevel level,
+            Money price,
+            int maximumSeats,
+            UUID categoryId,
+            UUID instructorId
+    ) {
+        if (status != CourseStatus.DRAFT && status != CourseStatus.PUBLISHED) {
+            throw new IllegalStateException("Archived courses cannot be revised");
+        }
+        validateCourseDetails(title, estimatedDurationHours, level, price, maximumSeats, categoryId, instructorId);
+        if (maximumSeats < occupiedSeats) {
+            throw new IllegalArgumentException("maximum seats cannot be less than occupied seats");
+        }
+
+        this.title = title;
+        this.description = description;
+        this.estimatedDurationHours = estimatedDurationHours;
+        this.level = level;
+        this.price = price;
+        this.maximumSeats = maximumSeats;
+        this.categoryId = categoryId;
+        this.instructorId = instructorId;
+    }
+
     public void publish() {
         if (status != CourseStatus.DRAFT) {
             throw new IllegalStateException("Only draft courses can be published");
@@ -124,5 +201,39 @@ public final class Course {
             throw new CourseHasNoOccupiedSeatsException();
         }
         occupiedSeats--;
+    }
+
+    private static void validateCourseDetails(
+            String title,
+            int estimatedDurationHours,
+            CourseLevel level,
+            Money price,
+            int maximumSeats,
+            UUID categoryId,
+            UUID instructorId
+    ) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
+        }
+        if (estimatedDurationHours <= 0) {
+            throw new IllegalArgumentException("estimated duration hours must be positive");
+        }
+        Objects.requireNonNull(level, "level must not be null");
+        Objects.requireNonNull(price, "price must not be null");
+        if (maximumSeats <= 0) {
+            throw new IllegalArgumentException("maximum seats must be positive");
+        }
+        Objects.requireNonNull(categoryId, "category id must not be null");
+        Objects.requireNonNull(instructorId, "instructor id must not be null");
+    }
+
+    private static void validateOccupancy(int occupiedSeats, int maximumSeats, CourseStatus status) {
+        Objects.requireNonNull(status, "status must not be null");
+        if (occupiedSeats < 0 || occupiedSeats > maximumSeats) {
+            throw new IllegalArgumentException("occupied seats must be between zero and maximum seats");
+        }
+        if (status == CourseStatus.DRAFT && occupiedSeats != 0) {
+            throw new IllegalArgumentException("draft courses cannot have occupied seats");
+        }
     }
 }

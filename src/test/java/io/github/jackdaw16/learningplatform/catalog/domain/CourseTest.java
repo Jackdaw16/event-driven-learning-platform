@@ -77,6 +77,116 @@ class CourseTest {
         assertThrows(CourseHasNoOccupiedSeatsException.class, course::releaseSeat);
     }
 
+    @Test
+    void rehydratesDraftPublishedAndArchivedCoursesWithTheirPersistedState() {
+        Course draft = rehydrateCourse(CourseStatus.DRAFT, 0, 3);
+        Course published = rehydrateCourse(CourseStatus.PUBLISHED, 2, 3);
+        Course archived = rehydrateCourse(CourseStatus.ARCHIVED, 3, 3);
+
+        assertEquals(CourseStatus.DRAFT, draft.status());
+        assertEquals(0, draft.occupiedSeats());
+        assertEquals(CourseStatus.PUBLISHED, published.status());
+        assertEquals(2, published.occupiedSeats());
+        assertEquals(CourseStatus.ARCHIVED, archived.status());
+        assertEquals(3, archived.occupiedSeats());
+    }
+
+    @Test
+    void rejectsInvalidOccupancyDuringRehydration() {
+        assertThrows(IllegalArgumentException.class, () -> rehydrateCourse(CourseStatus.PUBLISHED, -1, 3));
+        assertThrows(IllegalArgumentException.class, () -> rehydrateCourse(CourseStatus.PUBLISHED, 4, 3));
+        assertThrows(IllegalArgumentException.class, () -> rehydrateCourse(CourseStatus.DRAFT, 1, 3));
+        assertThrows(NullPointerException.class, () -> rehydrateCourse(null, 0, 3));
+    }
+
+    @Test
+    void revisesDraftCoursesWithoutChangingIdentityStatusOrOccupancy() {
+        Course course = draftCourse(3);
+        UUID id = course.id();
+
+        course.revise(
+                "Advanced Java 21",
+                "A deeper Java 21 course",
+                24,
+                CourseLevel.ADVANCED,
+                new Money(new BigDecimal("99.99"), Currency.getInstance("USD")),
+                5,
+                UUID.randomUUID(),
+                UUID.randomUUID()
+        );
+
+        assertEquals(id, course.id());
+        assertEquals(CourseStatus.DRAFT, course.status());
+        assertEquals(0, course.occupiedSeats());
+        assertEquals("Advanced Java 21", course.title());
+        assertEquals(5, course.maximumSeats());
+    }
+
+    @Test
+    void revisesPublishedCoursesWithoutChangingTheirOccupancy() {
+        Course course = draftCourse(3);
+        course.publish();
+        course.reserveSeat();
+
+        course.revise(
+                "Advanced Java 21",
+                "A deeper Java 21 course",
+                24,
+                CourseLevel.ADVANCED,
+                new Money(new BigDecimal("99.99"), Currency.getInstance("USD")),
+                5,
+                UUID.randomUUID(),
+                UUID.randomUUID()
+        );
+
+        assertEquals(CourseStatus.PUBLISHED, course.status());
+        assertEquals(1, course.occupiedSeats());
+    }
+
+    @Test
+    void rejectsRevisionOfArchivedCourses() {
+        Course course = draftCourse(3);
+        course.archive();
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> course.revise(
+                        "Advanced Java 21",
+                        "A deeper Java 21 course",
+                        24,
+                        CourseLevel.ADVANCED,
+                        new Money(new BigDecimal("99.99"), Currency.getInstance("USD")),
+                        5,
+                        UUID.randomUUID(),
+                        UUID.randomUUID()
+                )
+        );
+    }
+
+    @Test
+    void preventsRevisionFromReducingCapacityBelowOccupiedSeats() {
+        Course course = draftCourse(3);
+        course.publish();
+        course.reserveSeat();
+        course.reserveSeat();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> course.revise(
+                        "Advanced Java 21",
+                        "A deeper Java 21 course",
+                        24,
+                        CourseLevel.ADVANCED,
+                        new Money(new BigDecimal("99.99"), Currency.getInstance("USD")),
+                        1,
+                        UUID.randomUUID(),
+                        UUID.randomUUID()
+                )
+        );
+        assertEquals(3, course.maximumSeats());
+        assertEquals(2, course.occupiedSeats());
+    }
+
     private Course draftCourse(int maximumSeats) {
         return draftCourse("Java 21 Fundamentals", 12, maximumSeats);
     }
@@ -90,6 +200,22 @@ class CourseTest {
                 CourseLevel.BEGINNER,
                 new Money(new BigDecimal("49.99"), Currency.getInstance("USD")),
                 maximumSeats,
+                UUID.randomUUID(),
+                UUID.randomUUID()
+        );
+    }
+
+    private Course rehydrateCourse(CourseStatus status, int occupiedSeats, int maximumSeats) {
+        return Course.rehydrate(
+                UUID.randomUUID(),
+                "Java 21 Fundamentals",
+                "A practical introduction to Java 21",
+                12,
+                CourseLevel.BEGINNER,
+                new Money(new BigDecimal("49.99"), Currency.getInstance("USD")),
+                maximumSeats,
+                occupiedSeats,
+                status,
                 UUID.randomUUID(),
                 UUID.randomUUID()
         );
