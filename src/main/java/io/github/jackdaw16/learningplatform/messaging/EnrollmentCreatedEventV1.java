@@ -9,7 +9,7 @@ public record EnrollmentCreatedEventV1(
         UUID enrollmentId,
         UUID paymentId,
         BigDecimal amount,
-        String currency) {
+        String currency) implements IntegrationEvent {
 
     public static final String EVENT_TYPE = "enrollment.created.v1";
     public static final int VERSION = 1;

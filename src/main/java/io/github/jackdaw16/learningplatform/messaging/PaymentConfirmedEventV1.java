@@ -3,7 +3,7 @@ package io.github.jackdaw16.learningplatform.messaging;
 import java.util.Objects;
 import java.util.UUID;
 
-public record PaymentConfirmedEventV1(EventMetadataV1 metadata, UUID paymentId, UUID enrollmentId) {
+public record PaymentConfirmedEventV1(EventMetadataV1 metadata, UUID paymentId, UUID enrollmentId) implements IntegrationEvent {
 
     public static final String EVENT_TYPE = "payment.confirmed.v1";
     public static final int VERSION = 1;
