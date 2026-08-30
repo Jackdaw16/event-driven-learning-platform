@@ -1,5 +1,6 @@
 package io.github.jackdaw16.learningplatform.catalog.infrastructure.http;
 
+import io.github.jackdaw16.learningplatform.auth.infrastructure.security.OwnershipAuthorization;
 import io.github.jackdaw16.learningplatform.catalog.application.CourseService;
 import io.github.jackdaw16.learningplatform.catalog.application.CreateCourseCommand;
 import io.github.jackdaw16.learningplatform.catalog.application.UpdateCourseCommand;
@@ -27,14 +28,17 @@ public class CourseController {
     private static final Set<String> SORT_FIELDS = Set.of("title", "price", "level", "estimatedDurationHours");
 
     private final CourseService courseService;
+    private final OwnershipAuthorization ownershipAuthorization;
 
-    public CourseController(CourseService courseService) {
+    public CourseController(CourseService courseService, OwnershipAuthorization ownershipAuthorization) {
         this.courseService = courseService;
+        this.ownershipAuthorization = ownershipAuthorization;
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<CourseResponse> create(@Valid @RequestBody CourseRequest request) {
+        ownershipAuthorization.requireCourseCreation(request.instructorId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(CourseResponse.from(courseService.create(createCommand(request))));
     }
@@ -73,23 +77,25 @@ public class CourseController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public CourseResponse update(@PathVariable UUID id, @Valid @RequestBody CourseRequest request) {
+        ownershipAuthorization.requireCourseUpdate(id, request.instructorId());
         return CourseResponse.from(courseService.update(id, updateCommand(request)));
     }
 
     @PostMapping("/{id}/publish")
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public CourseResponse publish(@PathVariable UUID id) {
+        ownershipAuthorization.requireCourseMutation(id);
         return CourseResponse.from(courseService.publish(id));
     }
 
     @PostMapping("/{id}/archive")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public CourseResponse archive(@PathVariable UUID id) {
         return CourseResponse.from(courseService.archive(id));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         courseService.delete(id);
         return ResponseEntity.noContent().build();

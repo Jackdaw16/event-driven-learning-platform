@@ -6,6 +6,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import io.github.jackdaw16.learningplatform.auth.infrastructure.security.OwnershipAuthorization;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -43,6 +45,7 @@ class EnrollmentControllerTest {
     private final EnrollmentCreationService enrollmentCreationService = mock(EnrollmentCreationService.class);
     private final EnrollmentCancellationService enrollmentCancellationService = mock(EnrollmentCancellationService.class);
     private final EnrollmentProgressService enrollmentProgressService = mock(EnrollmentProgressService.class);
+    private final OwnershipAuthorization ownershipAuthorization = mock(OwnershipAuthorization.class);
 
     private MockMvc mockMvc;
 
@@ -50,9 +53,10 @@ class EnrollmentControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new EnrollmentController(
-                                enrollmentCreationService,
-                                enrollmentCancellationService,
-                                enrollmentProgressService
+                                 enrollmentCreationService,
+                                 enrollmentCancellationService,
+                                enrollmentProgressService,
+                                ownershipAuthorization
                         )
                 )
                 .setControllerAdvice(new ApiExceptionHandler())

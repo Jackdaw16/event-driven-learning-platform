@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import io.github.jackdaw16.learningplatform.auth.infrastructure.security.OwnershipAuthorization;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -41,13 +43,14 @@ class CourseControllerTest {
     private MockMvc mockMvc;
 
     private final CourseService courseService = mock(CourseService.class);
+    private final OwnershipAuthorization ownershipAuthorization = mock(OwnershipAuthorization.class);
 
     private final UUID categoryId = UUID.randomUUID();
     private final UUID instructorId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new CourseController(courseService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new CourseController(courseService, ownershipAuthorization))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -127,6 +130,7 @@ class CourseControllerTest {
 
         ArgumentCaptor<UpdateCourseCommand> command = ArgumentCaptor.forClass(UpdateCourseCommand.class);
         verify(courseService).update(org.mockito.ArgumentMatchers.eq(id), command.capture());
+        verify(ownershipAuthorization).requireCourseUpdate(id, instructorId);
         org.junit.jupiter.api.Assertions.assertEquals(
                 new UpdateCourseCommand(
                         "Advanced Java",
