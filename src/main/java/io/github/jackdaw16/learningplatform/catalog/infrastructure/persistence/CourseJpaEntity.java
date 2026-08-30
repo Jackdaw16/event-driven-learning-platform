@@ -41,7 +41,7 @@ public class CourseJpaEntity {
     @Column(name = "maximum_seats", nullable = false)
     private int maximumSeats;
 
-    @Column(name = "occupied_seats", nullable = false)
+    @Column(name = "occupied_seats", nullable = false, updatable = false)
     private int occupiedSeats;
 
     @Enumerated(EnumType.STRING)

@@ -33,6 +33,45 @@ class EnrollmentTest {
     }
 
     @Test
+    void rehydratesEveryValidLifecycleState() {
+        UUID id = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Instant enrolledAt = Instant.parse("2026-08-29T12:00:00Z");
+        Instant completedAt = Instant.parse("2026-08-29T13:00:00Z");
+
+        assertRehydratedEnrollment(id, studentId, courseId, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 0, null);
+        assertRehydratedEnrollment(id, studentId, courseId, enrolledAt, EnrollmentStatus.ACTIVE, 75, null);
+        assertRehydratedEnrollment(id, studentId, courseId, enrolledAt, EnrollmentStatus.COMPLETED, 100, completedAt);
+        assertRehydratedEnrollment(id, studentId, courseId, enrolledAt, EnrollmentStatus.CANCELLED, 50, null);
+    }
+
+    @Test
+    void rejectsInvalidRehydratedStateAndRequiredFields() {
+        UUID id = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        Instant enrolledAt = Instant.parse("2026-08-29T12:00:00Z");
+        Instant completedAt = Instant.parse("2026-08-29T13:00:00Z");
+
+        assertThrows(NullPointerException.class, () -> Enrollment.rehydrate(null, studentId, courseId, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 0, null));
+        assertThrows(NullPointerException.class, () -> Enrollment.rehydrate(id, null, courseId, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 0, null));
+        assertThrows(NullPointerException.class, () -> Enrollment.rehydrate(id, studentId, null, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 0, null));
+        assertThrows(NullPointerException.class, () -> Enrollment.rehydrate(id, studentId, courseId, null, EnrollmentStatus.PENDING_PAYMENT, 0, null));
+        assertThrows(NullPointerException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, null, 0, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.ACTIVE, -1, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.ACTIVE, 101, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 1, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.PENDING_PAYMENT, 0, completedAt));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.ACTIVE, 100, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.ACTIVE, 99, completedAt));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.COMPLETED, 99, completedAt));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.COMPLETED, 100, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.CANCELLED, 100, null));
+        assertThrows(IllegalArgumentException.class, () -> Enrollment.rehydrate(id, studentId, courseId, enrolledAt, EnrollmentStatus.CANCELLED, 99, completedAt));
+    }
+
+    @Test
     void activatesOnlyPendingPaymentEnrollments() {
         Enrollment activeEnrollment = new Enrollment(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), Instant.parse("2026-08-29T12:00:00Z")
@@ -121,5 +160,25 @@ class EnrollmentTest {
         completedEnrollment.updateProgress(100, Instant.parse("2026-08-29T13:00:00Z"));
 
         assertThrows(IllegalStateException.class, completedEnrollment::cancel);
+    }
+
+    private void assertRehydratedEnrollment(
+            UUID id,
+            UUID studentId,
+            UUID courseId,
+            Instant enrolledAt,
+            EnrollmentStatus status,
+            int progress,
+            Instant completedAt
+    ) {
+        Enrollment enrollment = Enrollment.rehydrate(id, studentId, courseId, enrolledAt, status, progress, completedAt);
+
+        assertEquals(id, enrollment.id());
+        assertEquals(studentId, enrollment.studentId());
+        assertEquals(courseId, enrollment.courseId());
+        assertEquals(enrolledAt, enrollment.enrolledAt());
+        assertEquals(status, enrollment.status());
+        assertEquals(progress, enrollment.progress());
+        assertEquals(completedAt, enrollment.completedAt());
     }
 }

@@ -23,6 +23,29 @@ public final class Enrollment {
         this.progress = 0;
     }
 
+    public static Enrollment rehydrate(
+            UUID id,
+            UUID studentId,
+            UUID courseId,
+            Instant enrolledAt,
+            EnrollmentStatus status,
+            int progress,
+            Instant completedAt
+    ) {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(studentId, "student id must not be null");
+        Objects.requireNonNull(courseId, "course id must not be null");
+        Objects.requireNonNull(enrolledAt, "enrollment timestamp must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+        validateRehydratedState(status, progress, completedAt);
+
+        Enrollment enrollment = new Enrollment(id, studentId, courseId, enrolledAt);
+        enrollment.status = status;
+        enrollment.progress = progress;
+        enrollment.completedAt = completedAt;
+        return enrollment;
+    }
+
     public UUID id() {
         return id;
     }
@@ -82,5 +105,29 @@ public final class Enrollment {
             throw new IllegalStateException("Only pending payment or active enrollments can be cancelled");
         }
         status = EnrollmentStatus.CANCELLED;
+    }
+
+    private static void validateRehydratedState(EnrollmentStatus status, int progress, Instant completedAt) {
+        if (progress < 0 || progress > 100) {
+            throw new IllegalArgumentException("progress must be between 0 and 100");
+        }
+
+        switch (status) {
+            case PENDING_PAYMENT -> {
+                if (progress != 0 || completedAt != null) {
+                    throw new IllegalArgumentException("pending payment enrollments must have zero progress and no completion timestamp");
+                }
+            }
+            case ACTIVE, CANCELLED -> {
+                if (progress >= 100 || completedAt != null) {
+                    throw new IllegalArgumentException("active and cancelled enrollments must be incomplete and have no completion timestamp");
+                }
+            }
+            case COMPLETED -> {
+                if (progress != 100 || completedAt == null) {
+                    throw new IllegalArgumentException("completed enrollments must have full progress and a completion timestamp");
+                }
+            }
+        }
     }
 }
