@@ -4,11 +4,13 @@ import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollm
 import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollmentResult;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCancellationService;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCreationService;
+import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentProgressService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -19,13 +21,16 @@ public class EnrollmentController {
 
     private final EnrollmentCreationService enrollmentCreationService;
     private final EnrollmentCancellationService enrollmentCancellationService;
+    private final EnrollmentProgressService enrollmentProgressService;
 
     public EnrollmentController(
             EnrollmentCreationService enrollmentCreationService,
-            EnrollmentCancellationService enrollmentCancellationService
+            EnrollmentCancellationService enrollmentCancellationService,
+            EnrollmentProgressService enrollmentProgressService
     ) {
         this.enrollmentCreationService = enrollmentCreationService;
         this.enrollmentCancellationService = enrollmentCancellationService;
+        this.enrollmentProgressService = enrollmentProgressService;
     }
 
     @PostMapping("/api/students/{studentId}/enrollments")
@@ -44,5 +49,13 @@ public class EnrollmentController {
     @PostMapping("/api/enrollments/{enrollmentId}/cancel")
     public EnrollmentCancellationResponse cancel(@PathVariable UUID enrollmentId) {
         return EnrollmentCancellationResponse.from(enrollmentCancellationService.cancel(enrollmentId));
+    }
+
+    @PatchMapping("/api/enrollments/{enrollmentId}/progress")
+    public EnrollmentProgressResponse updateProgress(
+            @PathVariable UUID enrollmentId,
+            @Valid @RequestBody EnrollmentProgressRequest request
+    ) {
+        return EnrollmentProgressResponse.from(enrollmentProgressService.updateProgress(enrollmentId, request.progress()));
     }
 }

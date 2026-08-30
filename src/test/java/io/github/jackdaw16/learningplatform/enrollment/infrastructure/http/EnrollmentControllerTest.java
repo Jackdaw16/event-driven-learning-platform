@@ -6,6 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,6 +18,7 @@ import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollm
 import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollmentResult;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCancellationService;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCreationService;
+import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentProgressService;
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatUnavailableException;
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatReleaseFailedException;
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.EnrollmentAlreadyExistsException;
@@ -40,13 +42,18 @@ class EnrollmentControllerTest {
 
     private final EnrollmentCreationService enrollmentCreationService = mock(EnrollmentCreationService.class);
     private final EnrollmentCancellationService enrollmentCancellationService = mock(EnrollmentCancellationService.class);
+    private final EnrollmentProgressService enrollmentProgressService = mock(EnrollmentProgressService.class);
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new EnrollmentController(enrollmentCreationService, enrollmentCancellationService)
+                        new EnrollmentController(
+                                enrollmentCreationService,
+                                enrollmentCancellationService,
+                                enrollmentProgressService
+                        )
                 )
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
@@ -203,6 +210,86 @@ class EnrollmentControllerTest {
                 .andExpect(status().isInternalServerError());
     }
 
+    @Test
+    void updatesProgressWithOkResponse() throws Exception {
+        UUID enrollmentId = UUID.randomUUID();
+        Enrollment enrollment = Enrollment.rehydrate(
+                enrollmentId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                Instant.parse("2026-08-30T12:00:00Z"),
+                EnrollmentStatus.ACTIVE,
+                75,
+                null
+        );
+        when(enrollmentProgressService.updateProgress(enrollmentId, 75)).thenReturn(enrollment);
+
+        mockMvc.perform(progressRequest(enrollmentId, 75))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrollmentId").value(enrollmentId.toString()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.progress").value(75))
+                .andExpect(jsonPath("$.completedAt").doesNotExist());
+
+        verify(enrollmentProgressService).updateProgress(enrollmentId, 75);
+    }
+
+    @Test
+    void returnsCompletionResponse() throws Exception {
+        UUID enrollmentId = UUID.randomUUID();
+        Instant completedAt = Instant.parse("2026-08-30T12:00:00.123456Z");
+        Enrollment enrollment = Enrollment.rehydrate(
+                enrollmentId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                Instant.parse("2026-08-30T12:00:00Z"),
+                EnrollmentStatus.COMPLETED,
+                100,
+                completedAt
+        );
+        when(enrollmentProgressService.updateProgress(enrollmentId, 100)).thenReturn(enrollment);
+
+        mockMvc.perform(progressRequest(enrollmentId, 100))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.progress").value(100))
+                .andExpect(jsonPath("$.completedAt").value(completedAt.toString()));
+    }
+
+    @Test
+    void rejectsProgressOutsideTheAllowedRange() throws Exception {
+        UUID enrollmentId = UUID.randomUUID();
+
+        mockMvc.perform(progressRequest(enrollmentId, -1))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(progressRequest(enrollmentId, 101))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(enrollmentProgressService);
+    }
+
+    @Test
+    void returnsNotFoundForMissingEnrollmentProgress() throws Exception {
+        UUID enrollmentId = UUID.randomUUID();
+        when(enrollmentProgressService.updateProgress(enrollmentId, 75))
+                .thenThrow(new ResourceNotFoundException("Enrollment", enrollmentId));
+
+        mockMvc.perform(progressRequest(enrollmentId, 75))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void returnsConflictForInvalidEnrollmentProgressLifecycle() throws Exception {
+        UUID enrollmentId = UUID.randomUUID();
+        when(enrollmentProgressService.updateProgress(enrollmentId, 75))
+                .thenThrow(new IllegalStateException("Only active enrollments can update progress"));
+
+        mockMvc.perform(progressRequest(enrollmentId, 75))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder createRequest(
             UUID studentId,
             UUID courseId,
@@ -216,6 +303,15 @@ class EnrollmentControllerTest {
 
     private String requestBody(UUID courseId) {
         return "{\"courseId\":\"%s\"}".formatted(courseId);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder progressRequest(
+            UUID enrollmentId,
+            int progress
+    ) {
+        return patch("/api/enrollments/{enrollmentId}/progress", enrollmentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"progress\":%d}".formatted(progress));
     }
 
     private CreateEnrollmentResult result(UUID studentId, UUID courseId, boolean replayed) {
