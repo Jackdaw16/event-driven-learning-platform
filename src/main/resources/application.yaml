@@ -4,6 +4,7 @@ spring:
     username: ${POSTGRES_USER:learning_platform}
     password: ${POSTGRES_PASSWORD}
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
   rabbitmq:
@@ -33,3 +34,9 @@ management:
     health:
       show-components: always
       show-details: never
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: event-driven-learning-platform
+    ttl: ${JWT_TTL:PT1H}

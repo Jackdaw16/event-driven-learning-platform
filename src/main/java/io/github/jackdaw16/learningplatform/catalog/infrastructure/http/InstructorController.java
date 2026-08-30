@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ public class InstructorController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InstructorResponse> create(@Valid @RequestBody InstructorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(InstructorResponse.from(instructorService.create(request.name(), request.email(), request.biography())));
@@ -52,11 +54,13 @@ public class InstructorController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public InstructorResponse update(@PathVariable UUID id, @Valid @RequestBody InstructorRequest request) {
         return InstructorResponse.from(instructorService.update(id, request.name(), request.email(), request.biography()));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         instructorService.delete(id);
         return ResponseEntity.noContent().build();

@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +33,7 @@ public class CourseController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<CourseResponse> create(@Valid @RequestBody CourseRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(CourseResponse.from(courseService.create(createCommand(request))));
@@ -69,21 +71,25 @@ public class CourseController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public CourseResponse update(@PathVariable UUID id, @Valid @RequestBody CourseRequest request) {
         return CourseResponse.from(courseService.update(id, updateCommand(request)));
     }
 
     @PostMapping("/{id}/publish")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public CourseResponse publish(@PathVariable UUID id) {
         return CourseResponse.from(courseService.publish(id));
     }
 
     @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public CourseResponse archive(@PathVariable UUID id) {
         return CourseResponse.from(courseService.archive(id));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         courseService.delete(id);
         return ResponseEntity.noContent().build();

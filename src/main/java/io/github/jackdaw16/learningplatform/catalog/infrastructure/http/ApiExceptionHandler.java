@@ -1,5 +1,6 @@
 package io.github.jackdaw16.learningplatform.catalog.infrastructure.http;
 
+import io.github.jackdaw16.learningplatform.auth.application.exception.InvalidCredentialsException;
 import io.github.jackdaw16.learningplatform.catalog.application.exception.ConflictException;
 import io.github.jackdaw16.learningplatform.catalog.application.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
@@ -8,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,6 +44,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> handleDataIntegrityViolation() {
         return problem(HttpStatus.CONFLICT, "Conflict", "The operation conflicts with existing data.");
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCredentials() {
+        return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", "Invalid username or password.");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ProblemDetail> handleAccessDenied() {
+        return problem(HttpStatus.FORBIDDEN, "Forbidden", "You do not have permission to access this resource.");
     }
 
     @ExceptionHandler({
