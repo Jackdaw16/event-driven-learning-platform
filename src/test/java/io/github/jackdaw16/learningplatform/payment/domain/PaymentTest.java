@@ -36,6 +36,39 @@ class PaymentTest {
     }
 
     @Test
+    void rehydratesEveryExistingStatus() {
+        UUID id = UUID.randomUUID();
+        UUID enrollmentId = UUID.randomUUID();
+        Instant createdAt = Instant.parse("2026-08-29T12:00:00Z");
+
+        for (PaymentStatus status : PaymentStatus.values()) {
+            Payment payment = Payment.rehydrate(id, enrollmentId, AMOUNT, "payment-1", createdAt, status);
+
+            assertEquals(id, payment.id());
+            assertEquals(enrollmentId, payment.enrollmentId());
+            assertEquals(AMOUNT, payment.amount());
+            assertEquals("payment-1", payment.idempotencyKey());
+            assertEquals(createdAt, payment.createdAt());
+            assertEquals(status, payment.status());
+        }
+    }
+
+    @Test
+    void rehydratePreservesConstructorValidationAndRequiresStatus() {
+        UUID id = UUID.randomUUID();
+        UUID enrollmentId = UUID.randomUUID();
+        Instant createdAt = Instant.parse("2026-08-29T12:00:00Z");
+
+        assertThrows(NullPointerException.class, () -> Payment.rehydrate(null, enrollmentId, AMOUNT, "payment-1", createdAt, PaymentStatus.PENDING));
+        assertThrows(NullPointerException.class, () -> Payment.rehydrate(id, null, AMOUNT, "payment-1", createdAt, PaymentStatus.PENDING));
+        assertThrows(NullPointerException.class, () -> Payment.rehydrate(id, enrollmentId, null, "payment-1", createdAt, PaymentStatus.PENDING));
+        assertThrows(IllegalArgumentException.class, () -> Payment.rehydrate(id, enrollmentId, AMOUNT, null, createdAt, PaymentStatus.PENDING));
+        assertThrows(IllegalArgumentException.class, () -> Payment.rehydrate(id, enrollmentId, AMOUNT, "  ", createdAt, PaymentStatus.PENDING));
+        assertThrows(NullPointerException.class, () -> Payment.rehydrate(id, enrollmentId, AMOUNT, "payment-1", null, PaymentStatus.PENDING));
+        assertThrows(NullPointerException.class, () -> Payment.rehydrate(id, enrollmentId, AMOUNT, "payment-1", createdAt, null));
+    }
+
+    @Test
     void confirmsOnlyPendingPayments() {
         Payment confirmedPayment = new Payment(
                 UUID.randomUUID(), UUID.randomUUID(), AMOUNT, "payment-1", Instant.parse("2026-08-29T12:00:00Z")

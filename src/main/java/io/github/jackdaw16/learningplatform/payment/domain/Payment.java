@@ -26,6 +26,19 @@ public final class Payment {
         this.status = PaymentStatus.PENDING;
     }
 
+    public static Payment rehydrate(
+            UUID id,
+            UUID enrollmentId,
+            Money amount,
+            String idempotencyKey,
+            Instant createdAt,
+            PaymentStatus status
+    ) {
+        Payment payment = new Payment(id, enrollmentId, amount, idempotencyKey, createdAt);
+        payment.status = Objects.requireNonNull(status, "status must not be null");
+        return payment;
+    }
+
     public UUID id() {
         return id;
     }
