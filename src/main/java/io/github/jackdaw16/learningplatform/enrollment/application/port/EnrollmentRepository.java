@@ -10,5 +10,7 @@ public interface EnrollmentRepository {
 
     Optional<Enrollment> findById(UUID id);
 
+    Optional<Enrollment> findByIdForUpdate(UUID enrollmentId);
+
     Optional<Enrollment> findLiveByStudentIdAndCourseId(UUID studentId, UUID courseId);
 }

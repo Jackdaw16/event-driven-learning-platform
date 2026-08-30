@@ -36,6 +36,11 @@ public class EnrollmentPersistenceAdapter implements EnrollmentRepository {
     }
 
     @Override
+    public Optional<Enrollment> findByIdForUpdate(UUID enrollmentId) {
+        return repository.findByIdForUpdate(enrollmentId).map(this::toDomain);
+    }
+
+    @Override
     public Optional<Enrollment> findLiveByStudentIdAndCourseId(UUID studentId, UUID courseId) {
         return repository.findByStudentIdAndCourseIdAndStatusIn(
                 studentId,
