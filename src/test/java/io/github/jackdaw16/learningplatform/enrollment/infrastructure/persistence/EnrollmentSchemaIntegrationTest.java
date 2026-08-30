@@ -37,7 +37,7 @@ class EnrollmentSchemaIntegrationTest {
 
     @BeforeEach
     void clearEnrollmentData() throws SQLException {
-        execute("TRUNCATE TABLE payments, enrollments, students, courses, categories, instructors");
+        execute("TRUNCATE TABLE certificates, payments, enrollments, students, courses, categories, instructors");
     }
 
     @Test

@@ -60,7 +60,7 @@ class CatalogPersistenceIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() {
-        jdbcTemplate.execute("TRUNCATE TABLE payments, enrollments, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test

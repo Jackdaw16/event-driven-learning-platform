@@ -95,7 +95,7 @@ class EnrollmentProgressIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_events, payments, enrollments, students, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE outbox_events, certificates, payments, enrollments, students, courses, categories, instructors");
         categoryId = UUID.randomUUID();
         instructorId = UUID.randomUUID();
         categoryRepository.save(new Category(categoryId, "Progress", null));

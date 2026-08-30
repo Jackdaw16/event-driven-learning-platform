@@ -75,7 +75,7 @@ class CourseSeatInventoryIntegrationTest {
 
     @BeforeEach
     void setUpPrerequisites() {
-        jdbcTemplate.execute("TRUNCATE TABLE payments, enrollments, students, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE certificates, payments, enrollments, students, courses, categories, instructors");
         categoryId = UUID.randomUUID();
         instructorId = UUID.randomUUID();
         categoryRepository.save(new Category(categoryId, "Inventory", null));

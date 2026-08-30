@@ -128,7 +128,7 @@ class PaymentWorkflowIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.execute("TRUNCATE TABLE processed_events, outbox_events, payments, enrollments, students, courses, "
+        jdbcTemplate.execute("TRUNCATE TABLE processed_events, outbox_events, certificates, payments, enrollments, students, courses, "
                 + "categories, instructors");
         purgeQueues();
         paymentProcessor.reset();

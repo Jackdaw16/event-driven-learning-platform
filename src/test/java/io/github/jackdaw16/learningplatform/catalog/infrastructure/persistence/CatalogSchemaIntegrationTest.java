@@ -42,7 +42,7 @@ class CatalogSchemaIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() throws SQLException {
-        execute("TRUNCATE TABLE payments, enrollments, courses, categories, instructors");
+        execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test
