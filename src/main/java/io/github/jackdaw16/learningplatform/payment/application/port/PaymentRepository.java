@@ -10,6 +10,8 @@ public interface PaymentRepository {
 
     Optional<Payment> findById(UUID id);
 
+    Optional<Payment> findByIdForUpdate(UUID id);
+
     Optional<Payment> findByEnrollmentId(UUID enrollmentId);
 
     Optional<Payment> findByIdempotencyKey(String idempotencyKey);

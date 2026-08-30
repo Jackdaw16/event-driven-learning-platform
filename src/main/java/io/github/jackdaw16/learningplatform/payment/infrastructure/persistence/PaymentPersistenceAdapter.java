@@ -36,6 +36,11 @@ public class PaymentPersistenceAdapter implements PaymentRepository {
     }
 
     @Override
+    public Optional<Payment> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(this::toDomain);
+    }
+
+    @Override
     public Optional<Payment> findByEnrollmentId(UUID enrollmentId) {
         return repository.findByEnrollmentId(enrollmentId).map(this::toDomain);
     }

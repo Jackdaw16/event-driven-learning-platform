@@ -1,0 +1,60 @@
+package io.github.jackdaw16.learningplatform.enrollment.application;
+
+import io.github.jackdaw16.learningplatform.catalog.application.exception.ResourceNotFoundException;
+import io.github.jackdaw16.learningplatform.catalog.application.port.CourseSeatInventory;
+import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatReleaseFailedException;
+import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
+import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
+import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
+import io.github.jackdaw16.learningplatform.messaging.PaymentFailedEventV1;
+import io.github.jackdaw16.learningplatform.payment.application.port.PaymentRepository;
+import io.github.jackdaw16.learningplatform.payment.domain.Payment;
+import io.github.jackdaw16.learningplatform.payment.domain.PaymentStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class EnrollmentPaymentFailedService {
+
+    private final EnrollmentRepository enrollmentRepository;
+    private final CourseSeatInventory courseSeatInventory;
+    private final PaymentRepository paymentRepository;
+
+    public EnrollmentPaymentFailedService(
+            EnrollmentRepository enrollmentRepository,
+            CourseSeatInventory courseSeatInventory,
+            PaymentRepository paymentRepository
+    ) {
+        this.enrollmentRepository = enrollmentRepository;
+        this.courseSeatInventory = courseSeatInventory;
+        this.paymentRepository = paymentRepository;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void fail(PaymentFailedEventV1 event) {
+        Payment payment = paymentRepository.findById(event.paymentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Payment", event.paymentId()));
+        if (!payment.enrollmentId().equals(event.enrollmentId())) {
+            throw new IllegalStateException("payment does not belong to the enrollment in the event");
+        }
+        if (payment.status() != PaymentStatus.FAILED) {
+            throw new IllegalStateException("only failed payments can cancel enrollments");
+        }
+
+        Enrollment enrollment = enrollmentRepository.findByIdForUpdate(event.enrollmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment", event.enrollmentId()));
+        if (enrollment.status() == EnrollmentStatus.CANCELLED) {
+            return;
+        }
+        if (enrollment.status() != EnrollmentStatus.PENDING_PAYMENT) {
+            throw new IllegalStateException("only pending payment enrollments can be cancelled after payment failure");
+        }
+
+        enrollment.cancel();
+        enrollmentRepository.save(enrollment);
+        if (!courseSeatInventory.release(enrollment.courseId())) {
+            throw new CourseSeatReleaseFailedException(enrollment.courseId());
+        }
+    }
+}

@@ -17,6 +17,8 @@ spring:
       mandatory: true
 
 messaging:
+  payment:
+    simulated-outcome: CONFIRMED
   outbox:
     batch-size: 20
     poll-interval: 1s

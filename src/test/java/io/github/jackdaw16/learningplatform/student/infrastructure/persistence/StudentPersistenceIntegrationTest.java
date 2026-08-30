@@ -40,7 +40,7 @@ class StudentPersistenceIntegrationTest {
 
     @BeforeEach
     void clearStudentData() {
-        jdbcTemplate.execute("TRUNCATE TABLE payments, enrollments, students, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE certificates, payments, enrollments, students, courses, categories, instructors");
     }
 
     @Test

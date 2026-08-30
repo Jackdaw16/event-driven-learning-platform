@@ -2,6 +2,7 @@ package io.github.jackdaw16.learningplatform.catalog.infrastructure.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -25,30 +26,28 @@ class CatalogSchemaIntegrationTest {
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
-    private static int migrationsExecuted;
     private static List<String> migrationVersions;
 
     @BeforeAll
     static void migratesCleanDatabase() throws SQLException {
-        var result = Flyway.configure()
+        Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
 
-        migrationsExecuted = result.migrationsExecuted;
         migrationVersions = appliedMigrationVersions();
     }
 
     @BeforeEach
     void clearCatalogData() throws SQLException {
-        execute("TRUNCATE TABLE payments, enrollments, courses, categories, instructors");
+        execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test
-    void appliesV1ThroughV3ToACleanDatabase() {
-        assertEquals(3, migrationsExecuted);
-        assertEquals(List.of("1", "2", "3"), migrationVersions);
+    void appliesCatalogMigrationsToACleanDatabase() {
+        assertTrue(migrationVersions.size() >= 3);
+        assertEquals(List.of("1", "2", "3"), migrationVersions.subList(0, 3));
     }
 
     @Test

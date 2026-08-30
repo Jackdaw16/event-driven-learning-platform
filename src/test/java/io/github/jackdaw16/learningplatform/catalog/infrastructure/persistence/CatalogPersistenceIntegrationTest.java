@@ -60,17 +60,20 @@ class CatalogPersistenceIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() {
-        jdbcTemplate.execute("TRUNCATE TABLE payments, enrollments, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test
-    void appliesV1ThroughV3AndValidatesJpaMappingsAtContextStartup() {
+    void appliesCatalogMigrationsAtContextStartup() {
+        List<String> migrationVersions = jdbcTemplate.queryForList(
+                "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank",
+                String.class
+        );
+
+        assertTrue(migrationVersions.size() >= 3);
         assertEquals(
                 List.of("1", "2", "3"),
-                jdbcTemplate.queryForList(
-                        "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank",
-                        String.class
-                )
+                migrationVersions.subList(0, 3)
         );
     }
 

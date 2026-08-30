@@ -121,7 +121,7 @@ class EnrollmentCreationIntegrationTest {
 
     @BeforeEach
     void setUpPrerequisites() {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_events, payments, enrollments, students, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE outbox_events, certificates, payments, enrollments, students, courses, categories, instructors");
         categoryId = UUID.randomUUID();
         instructorId = UUID.randomUUID();
         categoryRepository.save(new Category(categoryId, "Enrollment", null));
