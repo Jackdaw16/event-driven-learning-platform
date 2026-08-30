@@ -1,0 +1,9 @@
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
+messaging:
+  outbox:
+    poll-interval: 1h

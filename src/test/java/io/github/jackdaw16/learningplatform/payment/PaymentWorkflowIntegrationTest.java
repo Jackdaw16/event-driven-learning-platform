@@ -56,6 +56,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -64,8 +65,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(properties = "messaging.outbox.poll-interval=1h")
+@SpringBootTest(properties = {
+        "messaging.outbox.poll-interval=1h",
+        "spring.rabbitmq.listener.simple.auto-startup=true"
+})
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Import(PaymentWorkflowIntegrationTest.PaymentWorkflowTestConfiguration.class)
 class PaymentWorkflowIntegrationTest {
 

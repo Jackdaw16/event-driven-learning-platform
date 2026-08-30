@@ -33,6 +33,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -42,6 +43,7 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 @SpringBootTest(properties = "messaging.outbox.poll-interval=1h")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Import(ReliableConsumerIntegrationTest.TestConsumerConfiguration.class)
 class ReliableConsumerIntegrationTest {
 
@@ -314,7 +316,7 @@ class ReliableConsumerIntegrationTest {
             this.effect = effect;
         }
 
-        @RabbitListener(queues = RabbitTopology.PAYMENT_ENROLLMENT_CREATED_QUEUE)
+        @RabbitListener(queues = RabbitTopology.PAYMENT_ENROLLMENT_CREATED_QUEUE, autoStartup = "true")
         public void consume(Message message) {
             var metadata = metadataExtractor.extract(message);
             processor.process(metadata, EnrollmentCreatedEventV1.EVENT_TYPE, EnrollmentCreatedEventV1.VERSION,
