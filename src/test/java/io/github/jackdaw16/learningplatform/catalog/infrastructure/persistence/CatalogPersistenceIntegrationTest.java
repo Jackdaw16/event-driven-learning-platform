@@ -60,7 +60,7 @@ class CatalogPersistenceIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() {
-        jdbcTemplate.execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE auth_users, certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test
@@ -70,10 +70,10 @@ class CatalogPersistenceIntegrationTest {
                 String.class
         );
 
-        assertTrue(migrationVersions.size() >= 3);
+        assertTrue(migrationVersions.size() >= 7);
         assertEquals(
-                List.of("1", "2", "3"),
-                migrationVersions.subList(0, 3)
+                List.of("1", "2", "3", "4", "5", "6", "7"),
+                migrationVersions.subList(0, 7)
         );
     }
 

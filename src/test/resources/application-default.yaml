@@ -7,3 +7,7 @@ spring:
 messaging:
   outbox:
     poll-interval: 1h
+
+security:
+  jwt:
+    secret: test-jwt-secret-for-integration-tests-123456

@@ -41,13 +41,49 @@ class CatalogSchemaIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() throws SQLException {
-        execute("TRUNCATE TABLE certificates, payments, enrollments, courses, categories, instructors");
+        execute("TRUNCATE TABLE auth_users, certificates, payments, enrollments, courses, categories, instructors");
     }
 
     @Test
     void appliesCatalogMigrationsToACleanDatabase() {
-        assertTrue(migrationVersions.size() >= 3);
-        assertEquals(List.of("1", "2", "3"), migrationVersions.subList(0, 3));
+        assertTrue(migrationVersions.size() >= 7);
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7"), migrationVersions.subList(0, 7));
+    }
+
+    @Test
+    void enforcesAuthUsersRoleAndPrincipalConstraints() throws SQLException {
+        UUID adminId = UUID.randomUUID();
+        execute(
+                "INSERT INTO auth_users (id, username, password_hash, role, principal_id) VALUES (?, 'admin', ?, 'ADMIN', NULL)",
+                adminId,
+                "$2a$10$abcdefghijklmnopqrstuv1234567890abcdefghijklmnopqrstuv"
+        );
+
+        assertThrows(
+                SQLException.class,
+                () -> execute(
+                        "INSERT INTO auth_users (id, username, password_hash, role, principal_id) VALUES (?, 'student-no-principal', ?, 'STUDENT', NULL)",
+                        UUID.randomUUID(),
+                        "$2a$10$abcdefghijklmnopqrstuv1234567890abcdefghijklmnopqrstuv"
+                )
+        );
+        assertThrows(
+                SQLException.class,
+                () -> execute(
+                        "INSERT INTO auth_users (id, username, password_hash, role, principal_id) VALUES (?, 'bad-role', ?, 'MENTOR', ?)",
+                        UUID.randomUUID(),
+                        "$2a$10$abcdefghijklmnopqrstuv1234567890abcdefghijklmnopqrstuv",
+                        UUID.randomUUID()
+                )
+        );
+        assertThrows(
+                SQLException.class,
+                () -> execute(
+                        "INSERT INTO auth_users (id, username, password_hash, role, principal_id) VALUES (?, ' ', ?, 'ADMIN', NULL)",
+                        UUID.randomUUID(),
+                        "$2a$10$abcdefghijklmnopqrstuv1234567890abcdefghijklmnopqrstuv"
+                )
+        );
     }
 
     @Test

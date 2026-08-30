@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ public class CategoryController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(CategoryResponse.from(categoryService.create(request.name(), request.description())));
@@ -52,16 +54,19 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public CategoryResponse update(@PathVariable UUID id, @Valid @RequestBody CategoryRequest request) {
         return CategoryResponse.from(categoryService.update(id, request.name(), request.description()));
     }
 
     @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('ADMIN')")
     public CategoryResponse archive(@PathVariable UUID id) {
         return CategoryResponse.from(categoryService.archive(id));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         categoryService.delete(id);
         return ResponseEntity.noContent().build();
