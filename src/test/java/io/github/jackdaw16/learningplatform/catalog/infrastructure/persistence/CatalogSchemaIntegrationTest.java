@@ -42,13 +42,13 @@ class CatalogSchemaIntegrationTest {
 
     @BeforeEach
     void clearCatalogData() throws SQLException {
-        execute("TRUNCATE TABLE courses, categories, instructors");
+        execute("TRUNCATE TABLE payments, enrollments, courses, categories, instructors");
     }
 
     @Test
-    void appliesV1AndV2ToACleanDatabase() {
-        assertEquals(2, migrationsExecuted);
-        assertEquals(List.of("1", "2"), migrationVersions);
+    void appliesV1ThroughV3ToACleanDatabase() {
+        assertEquals(3, migrationsExecuted);
+        assertEquals(List.of("1", "2", "3"), migrationVersions);
     }
 
     @Test
