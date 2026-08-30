@@ -2,6 +2,8 @@ package io.github.jackdaw16.learningplatform.enrollment.infrastructure.persisten
 
 import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
 import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
+import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -31,6 +33,15 @@ public class EnrollmentPersistenceAdapter implements EnrollmentRepository {
     @Override
     public Optional<Enrollment> findById(UUID id) {
         return repository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<Enrollment> findLiveByStudentIdAndCourseId(UUID studentId, UUID courseId) {
+        return repository.findByStudentIdAndCourseIdAndStatusIn(
+                studentId,
+                courseId,
+                List.of(EnrollmentStatus.PENDING_PAYMENT, EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
+        ).map(this::toDomain);
     }
 
     private Enrollment toDomain(EnrollmentJpaEntity entity) {

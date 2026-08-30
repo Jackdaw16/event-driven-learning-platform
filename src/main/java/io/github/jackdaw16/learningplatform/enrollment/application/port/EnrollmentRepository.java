@@ -9,4 +9,6 @@ public interface EnrollmentRepository {
     void save(Enrollment enrollment);
 
     Optional<Enrollment> findById(UUID id);
+
+    Optional<Enrollment> findLiveByStudentIdAndCourseId(UUID studentId, UUID courseId);
 }
