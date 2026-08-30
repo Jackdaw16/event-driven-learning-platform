@@ -3,6 +3,7 @@ package io.github.jackdaw16.learningplatform.enrollment.application;
 import io.github.jackdaw16.learningplatform.catalog.application.exception.ResourceNotFoundException;
 import io.github.jackdaw16.learningplatform.catalog.application.port.CourseSeatInventory;
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatReleaseFailedException;
+import io.github.jackdaw16.learningplatform.enrollment.application.exception.EnrollmentCancellationNotAllowedException;
 import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
 import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
 import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
@@ -32,7 +33,11 @@ public class EnrollmentCancellationService {
             return enrollment;
         }
 
-        enrollment.cancel();
+        try {
+            enrollment.cancel();
+        } catch (IllegalStateException exception) {
+            throw new EnrollmentCancellationNotAllowedException(enrollmentId);
+        }
         enrollmentRepository.save(enrollment);
         if (!courseSeatInventory.release(enrollment.courseId())) {
             throw new CourseSeatReleaseFailedException(enrollment.courseId());

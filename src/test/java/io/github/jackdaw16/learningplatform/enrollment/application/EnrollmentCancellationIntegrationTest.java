@@ -15,6 +15,7 @@ import io.github.jackdaw16.learningplatform.catalog.domain.CourseLevel;
 import io.github.jackdaw16.learningplatform.catalog.domain.CourseStatus;
 import io.github.jackdaw16.learningplatform.catalog.domain.Instructor;
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatReleaseFailedException;
+import io.github.jackdaw16.learningplatform.enrollment.application.exception.EnrollmentCancellationNotAllowedException;
 import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
 import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
 import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
@@ -142,7 +143,7 @@ class EnrollmentCancellationIntegrationTest {
         Course course = saveCourse(CourseStatus.PUBLISHED, 1);
         Enrollment enrollment = saveEnrollment(course, EnrollmentStatus.COMPLETED);
 
-        assertThrows(IllegalStateException.class, () -> enrollmentCancellationService.cancel(enrollment.id()));
+        assertThrows(EnrollmentCancellationNotAllowedException.class, () -> enrollmentCancellationService.cancel(enrollment.id()));
 
         assertEquals(EnrollmentStatus.COMPLETED, enrollmentStatus(enrollment.id()));
         assertEquals(1, occupiedSeats(course.id()));
