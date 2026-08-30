@@ -9,11 +9,16 @@ import io.github.jackdaw16.learningplatform.enrollment.application.exception.Cou
 import io.github.jackdaw16.learningplatform.enrollment.application.exception.CourseSeatUnavailableException;
 import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
 import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
+import io.github.jackdaw16.learningplatform.messaging.EnrollmentCreatedEventV1;
+import io.github.jackdaw16.learningplatform.messaging.EventMetadataV1;
+import io.github.jackdaw16.learningplatform.messaging.RabbitTopology;
+import io.github.jackdaw16.learningplatform.messaging.application.port.IntegrationEventRecorder;
 import io.github.jackdaw16.learningplatform.payment.application.port.PaymentRepository;
 import io.github.jackdaw16.learningplatform.payment.domain.Payment;
 import io.github.jackdaw16.learningplatform.student.application.port.StudentRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +31,7 @@ public class EnrollmentCreationTransaction {
     private final CourseSeatInventory courseSeatInventory;
     private final EnrollmentRepository enrollmentRepository;
     private final PaymentRepository paymentRepository;
+    private final IntegrationEventRecorder integrationEventRecorder;
     private final Clock clock;
 
     public EnrollmentCreationTransaction(
@@ -34,6 +40,7 @@ public class EnrollmentCreationTransaction {
             CourseSeatInventory courseSeatInventory,
             EnrollmentRepository enrollmentRepository,
             PaymentRepository paymentRepository,
+            IntegrationEventRecorder integrationEventRecorder,
             Clock clock
     ) {
         this.studentRepository = studentRepository;
@@ -41,6 +48,7 @@ public class EnrollmentCreationTransaction {
         this.courseSeatInventory = courseSeatInventory;
         this.enrollmentRepository = enrollmentRepository;
         this.paymentRepository = paymentRepository;
+        this.integrationEventRecorder = integrationEventRecorder;
         this.clock = clock;
     }
 
@@ -66,6 +74,18 @@ public class EnrollmentCreationTransaction {
         );
         enrollmentRepository.save(enrollment);
         paymentRepository.save(payment);
+        integrationEventRecorder.record(new EnrollmentCreatedEventV1(
+                new EventMetadataV1(
+                        UUID.randomUUID(),
+                        EnrollmentCreatedEventV1.EVENT_TYPE,
+                        EnrollmentCreatedEventV1.VERSION,
+                        now.truncatedTo(ChronoUnit.MICROS)
+                ),
+                enrollment.id(),
+                payment.id(),
+                payment.amount().amount(),
+                payment.amount().currency().getCurrencyCode()
+        ), RabbitTopology.ENROLLMENT_CREATED_ROUTING_KEY);
         return new CreateEnrollmentResult(enrollment, payment, false);
     }
 

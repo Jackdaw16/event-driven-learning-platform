@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,6 +24,12 @@ import io.github.jackdaw16.learningplatform.enrollment.application.exception.Ide
 import io.github.jackdaw16.learningplatform.enrollment.application.port.EnrollmentRepository;
 import io.github.jackdaw16.learningplatform.enrollment.domain.Enrollment;
 import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
+import io.github.jackdaw16.learningplatform.messaging.EnrollmentCreatedEventV1;
+import io.github.jackdaw16.learningplatform.messaging.EventMetadataV1;
+import io.github.jackdaw16.learningplatform.messaging.IntegrationEvent;
+import io.github.jackdaw16.learningplatform.messaging.RabbitTopology;
+import io.github.jackdaw16.learningplatform.messaging.application.port.IntegrationEventRecorder;
+import io.github.jackdaw16.learningplatform.messaging.infrastructure.persistence.PostgresIntegrationEventRecorder;
 import io.github.jackdaw16.learningplatform.payment.domain.PaymentStatus;
 import io.github.jackdaw16.learningplatform.shared.Money;
 import io.github.jackdaw16.learningplatform.student.application.port.StudentRepository;
@@ -38,20 +45,30 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest
+@SpringBootTest(properties = "messaging.outbox.poll-interval=1h")
 @Testcontainers
+@Import(EnrollmentCreationIntegrationTest.FailingIntegrationEventRecorderConfiguration.class)
 class EnrollmentCreationIntegrationTest {
 
     private static final int CONCURRENT_WORKERS = 8;
@@ -80,6 +97,18 @@ class EnrollmentCreationIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private PostgresIntegrationEventRecorder postgresIntegrationEventRecorder;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private FailingIntegrationEventRecorder failingIntegrationEventRecorder;
+
     private UUID categoryId;
     private UUID instructorId;
 
@@ -92,7 +121,7 @@ class EnrollmentCreationIntegrationTest {
 
     @BeforeEach
     void setUpPrerequisites() {
-        jdbcTemplate.execute("TRUNCATE TABLE payments, enrollments, students, courses, categories, instructors");
+        jdbcTemplate.execute("TRUNCATE TABLE outbox_events, payments, enrollments, students, courses, categories, instructors");
         categoryId = UUID.randomUUID();
         instructorId = UUID.randomUUID();
         categoryRepository.save(new Category(categoryId, "Enrollment", null));
@@ -138,6 +167,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(full.id()));
         assertEquals(0, enrollmentCount());
         assertEquals(0, paymentCount());
+        assertEquals(0, outboxEventCount());
     }
 
     @Test
@@ -161,6 +191,100 @@ class EnrollmentCreationIntegrationTest {
     }
 
     @Test
+    void recordsPendingOutboxEventWithExactEnrollmentCreatedMetadataAndPayload() throws Exception {
+        Student student = saveStudent();
+        Course course = saveCourse(CourseStatus.PUBLISHED, 2, 0, new BigDecimal("49.9900"));
+
+        CreateEnrollmentResult result = enrollmentCreationService.create(
+                new CreateEnrollmentCommand(student.id(), course.id(), "outbox-event")
+        );
+
+        OutboxEventRow row = outboxEvent();
+        EnrollmentCreatedEventV1 payload = objectMapper.readValue(row.payload(), EnrollmentCreatedEventV1.class);
+
+        assertEquals(1, outboxEventCount());
+        assertEquals(payload.metadata().eventId(), row.eventId());
+        assertEquals(EnrollmentCreatedEventV1.EVENT_TYPE, row.eventType());
+        assertEquals(EnrollmentCreatedEventV1.VERSION, row.eventVersion());
+        assertEquals(row.eventType(), payload.metadata().eventType());
+        assertEquals(row.eventVersion(), payload.metadata().version());
+        assertEquals(payload.metadata().occurredAt(), row.occurredAt());
+        assertEquals(RabbitTopology.ENROLLMENT_CREATED_ROUTING_KEY, row.routingKey());
+        assertEquals("PENDING", row.status());
+        assertEquals(row.occurredAt(), row.createdAt());
+        assertNull(row.publishedAt());
+        assertEquals(0, row.attemptCount());
+        assertEquals(result.enrollment().id(), payload.enrollmentId());
+        assertEquals(result.payment().id(), payload.paymentId());
+        assertEquals(result.payment().amount().amount(), payload.amount());
+        assertEquals(result.payment().amount().currency().getCurrencyCode(), payload.currency());
+    }
+
+    @Test
+    void rejectsDuplicateOutboxEventIdsAtTheDatabaseBoundary() {
+        EnrollmentCreatedEventV1 event = new EnrollmentCreatedEventV1(
+                new EventMetadataV1(
+                        UUID.randomUUID(),
+                        EnrollmentCreatedEventV1.EVENT_TYPE,
+                        EnrollmentCreatedEventV1.VERSION,
+                        Instant.parse("2026-08-30T12:00:00Z")
+                ),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new BigDecimal("19.99"),
+                "USD"
+        );
+
+        transactionTemplate.executeWithoutResult(status -> postgresIntegrationEventRecorder.record(
+                event,
+                RabbitTopology.ENROLLMENT_CREATED_ROUTING_KEY
+        ));
+
+        assertThrows(DataIntegrityViolationException.class, () -> transactionTemplate.executeWithoutResult(
+                status -> postgresIntegrationEventRecorder.record(event, RabbitTopology.ENROLLMENT_CREATED_ROUTING_KEY)
+        ));
+        assertEquals(1, outboxEventCount());
+    }
+
+    @Test
+    void rejectsOutboxEventRecordingWithoutAnExistingTransaction() {
+        EnrollmentCreatedEventV1 event = new EnrollmentCreatedEventV1(
+                new EventMetadataV1(
+                        UUID.randomUUID(),
+                        EnrollmentCreatedEventV1.EVENT_TYPE,
+                        EnrollmentCreatedEventV1.VERSION,
+                        Instant.parse("2026-08-30T12:00:00Z")
+                ),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new BigDecimal("19.99"),
+                "USD"
+        );
+
+        assertThrows(IllegalTransactionStateException.class, () -> postgresIntegrationEventRecorder.record(
+                event,
+                RabbitTopology.ENROLLMENT_CREATED_ROUTING_KEY
+        ));
+        assertEquals(0, outboxEventCount());
+    }
+
+    @Test
+    void rollsBackSeatReservationEnrollmentPaymentAndOutboxWhenEventRecordingFails() {
+        Student student = saveStudent();
+        Course course = saveCourse(CourseStatus.PUBLISHED, 2, 0, new BigDecimal("19.99"));
+        failingIntegrationEventRecorder.failNextRecording();
+
+        assertThrows(DataIntegrityViolationException.class, () -> enrollmentCreationService.create(
+                new CreateEnrollmentCommand(student.id(), course.id(), "outbox-failure")
+        ));
+
+        assertEquals(0, occupiedSeats(course.id()));
+        assertEquals(0, enrollmentCount());
+        assertEquals(0, paymentCount());
+        assertEquals(0, outboxEventCount());
+    }
+
+    @Test
     void replaysSameKeyWithoutReservingAnotherSeatAndRejectsDifferentPayload() {
         Student student = saveStudent();
         Student otherStudent = saveStudent();
@@ -177,6 +301,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(course.id()));
         assertEquals(1, enrollmentCount());
         assertEquals(1, paymentCount());
+        assertEquals(1, outboxEventCount());
         assertThrows(IdempotencyConflictException.class, () -> enrollmentCreationService.create(
                 new CreateEnrollmentCommand(otherStudent.id(), course.id(), "replay-key")
         ));
@@ -219,6 +344,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(course.id()));
         assertEquals(1, enrollmentCount());
         assertEquals(1, paymentCount());
+        assertEquals(1, outboxEventCount());
     }
 
     @Test
@@ -243,6 +369,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(course.id()));
         assertEquals(1, enrollmentCount());
         assertEquals(1, paymentCount());
+        assertEquals(1, outboxEventCount());
     }
 
     @Test
@@ -264,6 +391,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(firstCourse.id()) + occupiedSeats(secondCourse.id()));
         assertEquals(1, enrollmentCount());
         assertEquals(1, paymentCount());
+        assertEquals(1, outboxEventCount());
     }
 
     @Test
@@ -281,6 +409,7 @@ class EnrollmentCreationIntegrationTest {
         assertEquals(1, occupiedSeats(course.id()));
         assertEquals(1, enrollmentCount());
         assertEquals(1, paymentCount());
+        assertEquals(1, outboxEventCount());
     }
 
     private Student saveStudent() {
@@ -380,6 +509,79 @@ class EnrollmentCreationIntegrationTest {
 
     private int paymentCount() {
         return jdbcTemplate.queryForObject("SELECT count(*) FROM payments", Integer.class);
+    }
+
+    private int outboxEventCount() {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM outbox_events", Integer.class);
+    }
+
+    private OutboxEventRow outboxEvent() {
+        return jdbcTemplate.queryForObject(
+                "SELECT event_id, event_type, event_version, occurred_at, routing_key, payload::text AS payload, "
+                        + "status, created_at, published_at, attempt_count FROM outbox_events",
+                (resultSet, rowNum) -> new OutboxEventRow(
+                        resultSet.getObject("event_id", UUID.class),
+                        resultSet.getString("event_type"),
+                        resultSet.getInt("event_version"),
+                        resultSet.getTimestamp("occurred_at").toInstant(),
+                        resultSet.getString("routing_key"),
+                        resultSet.getString("payload"),
+                        resultSet.getString("status"),
+                        resultSet.getTimestamp("created_at").toInstant(),
+                        resultSet.getTimestamp("published_at") == null
+                                ? null
+                                : resultSet.getTimestamp("published_at").toInstant(),
+                        resultSet.getInt("attempt_count")
+                )
+        );
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FailingIntegrationEventRecorderConfiguration {
+
+        @Bean
+        @Primary
+        FailingIntegrationEventRecorder failingIntegrationEventRecorder(
+                PostgresIntegrationEventRecorder delegate
+        ) {
+            return new FailingIntegrationEventRecorder(delegate);
+        }
+    }
+
+    static final class FailingIntegrationEventRecorder implements IntegrationEventRecorder {
+
+        private final PostgresIntegrationEventRecorder delegate;
+        private final AtomicBoolean failNextRecording = new AtomicBoolean();
+
+        FailingIntegrationEventRecorder(PostgresIntegrationEventRecorder delegate) {
+            this.delegate = delegate;
+        }
+
+        void failNextRecording() {
+            failNextRecording.set(true);
+        }
+
+        @Override
+        public void record(IntegrationEvent event, String routingKey) {
+            if (failNextRecording.compareAndSet(true, false)) {
+                throw new DataIntegrityViolationException("Forced outbox persistence failure");
+            }
+            delegate.record(event, routingKey);
+        }
+    }
+
+    private record OutboxEventRow(
+            UUID eventId,
+            String eventType,
+            int eventVersion,
+            Instant occurredAt,
+            String routingKey,
+            String payload,
+            String status,
+            Instant createdAt,
+            Instant publishedAt,
+            int attemptCount
+    ) {
     }
 
     private record Attempt<T>(T result, Throwable failure) {
