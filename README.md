@@ -328,7 +328,9 @@ Health is publicly accessible for operational probing.
 
 Metrics require an authenticated `ADMIN` token.
 
-No external monitoring or tracing stack is included.
+No external monitoring or distributed tracing stack is included. The rationale
+for keeping those optional operational components outside the current topology
+is documented below.
 
 ## API documentation
 
@@ -384,6 +386,33 @@ The test suite includes:
 
 PostgreSQL and RabbitMQ integration tests use Testcontainers.
 
+## Continuous integration
+
+GitHub Actions provides continuous integration for the repository.
+
+The CI workflow runs automatically for every pull request targeting `main` and
+for every push to `main`.
+
+It:
+
+- runs on a clean GitHub-hosted Linux environment;
+- provisions Temurin Java 21;
+- caches Maven dependencies;
+- executes `./mvnw -B verify`;
+- runs the complete unit and integration test suite;
+- starts ephemeral PostgreSQL and RabbitMQ instances through Testcontainers.
+
+No separately configured PostgreSQL or RabbitMQ CI services are required because
+the integration-test infrastructure is owned by the test suite itself.
+
+Running the same Testcontainers-backed suite on an ephemeral GitHub runner also
+provides an additional reproducibility check: successful execution does not rely
+on developer-machine database or broker state.
+
+CI was selected as an optional enhancement because it strengthens an existing
+quality guarantee without adding dependencies or infrastructure to the
+production runtime.
+
 ## Main trade-offs
 
 ### Modular monolith instead of microservices
@@ -422,19 +451,135 @@ These trade-offs are documented in greater detail in the corresponding ADRs.
 
 ## Known limitations and intentionally deferred work
 
-The following concerns are deliberately outside the scope of this implementation:
+The following product and operational concerns remain deliberately outside the
+current implementation:
 
 - external payment-provider integration;
 - user registration, password reset and account administration;
 - external identity providers;
 - refunds and payment reversals;
 - PDF or QR certificate generation;
-- Redis caching;
-- rate limiting;
-- external metrics dashboards;
-- distributed tracing;
 - Kubernetes deployment;
 - independent deployment of individual business modules.
 
-These are extension points rather than prerequisites for the current domain
-requirements.
+They are valid future extension points, but are not prerequisites for the
+domain behavior required by the current solution.
+
+## Optional scope and deliberate exclusions
+
+The assignment defines several additional capabilities as optional bonus work.
+
+Those capabilities were evaluated individually rather than introduced by
+default. The guiding principle was to add infrastructure or abstraction only
+when it solved a concrete problem in the current scope and its operational cost
+was justified.
+
+Continuous integration was included because it automatically validates the
+existing build and Testcontainers-backed test suite without affecting the
+runtime architecture.
+
+The remaining optional capabilities were deliberately deferred for the
+following reasons.
+
+### Redis / Spring Cache
+
+The current catalog requirements do not demonstrate a read-performance
+bottleneck that requires distributed caching.
+
+Adding Redis would introduce another runtime dependency together with cache
+invalidation, consistency and operational concerns without a measured need for
+them.
+
+The existing architecture leaves caching as an infrastructure concern that can
+be introduced later if access patterns or performance measurements justify it.
+
+### Rate limiting
+
+Rate limiting is a valid production hardening mechanism, particularly for
+authentication and other externally exposed endpoints.
+
+However, an appropriate implementation depends on deployment topology, trusted
+client-address information, quota semantics and whether limits must be shared
+between multiple application instances.
+
+Introducing an arbitrary in-process limit for the exercise would provide a
+potentially misleading guarantee rather than a production-ready distributed
+policy.
+
+It is therefore left as an extension to be designed together with the actual
+deployment and abuse model.
+
+### OpenTelemetry and external metrics dashboards
+
+Actuator and Micrometer already expose the health and application metrics
+required by the current solution.
+
+OpenTelemetry would provide additional value for end-to-end tracing,
+particularly across asynchronous boundaries, but exporting and consuming those
+traces would also introduce additional operational topology such as collectors
+and observability backends.
+
+For a single deployable modular monolith, that additional infrastructure was not
+required to validate the current operational requirements.
+
+Distributed tracing remains a natural next step if the application is split
+into independently deployed services or cross-service trace correlation becomes
+an operational requirement.
+
+### Cursor pagination
+
+The API currently provides bounded offset pagination and the relationship
+queries use dedicated projections with explicit N+1 regression coverage.
+
+Cursor pagination becomes particularly valuable for large or highly volatile
+datasets, deep pagination, or APIs requiring stable traversal while concurrent
+writes occur.
+
+None of those workload characteristics are defined by the current requirements,
+so a second pagination model was not added without a demonstrated need.
+
+### MCP integration
+
+MCP is a meaningful additional integration surface, but a useful implementation
+should expose the real application capabilities while preserving the same
+authorization, validation and business invariants as the REST API.
+
+Adding a shallow set of protocol wrappers solely to satisfy an optional item
+would provide less value than keeping those guarantees centralized in the
+existing application services.
+
+The current modular application-service boundaries provide suitable integration
+points for MCP tools if that interface becomes a required consumer of the
+platform.
+
+### Virtual threads
+
+Java 21 virtual threads can improve scalability for workloads dominated by
+blocking I/O, but enabling them does not remove downstream capacity constraints
+such as JDBC connection pools, RabbitMQ resources or database throughput.
+
+No workload profile or benchmark in the current scope demonstrates that request
+threads are the limiting resource.
+
+They were therefore not enabled merely as a framework switch; the decision
+should be backed by workload characteristics and measurements.
+
+### MapStruct
+
+The current DTO mappings are small and explicit.
+
+Introducing another annotation processor and mapping abstraction would add
+indirection without materially reducing complexity at the present scale.
+
+A generated mapping layer would become more valuable if the number and
+complexity of transport/domain mappings grows.
+
+## Delivery philosophy
+
+The implementation intentionally prioritizes correctness of the core domain,
+transactional integrity, concurrency safety, reliable messaging, security,
+automated verification and reproducible execution over maximizing the number of
+technologies included.
+
+Optional components remain explicit extension points rather than being
+introduced without a demonstrated requirement.
