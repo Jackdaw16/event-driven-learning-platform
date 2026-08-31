@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(properties = {
@@ -241,6 +243,19 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
+    void generatedOpenApiDocumentsCreationResponseCodes() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/categories"));
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/instructors"));
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/courses"));
+        assertEquals(Set.of("200", "201"), responseCodes(paths, "/api/students/{studentId}/enrollments"));
+    }
+
+    @Test
     void metricsRequireAnAdministratorAndAreAvailableThroughActuator() throws Exception {
         mockMvc.perform(get("/actuator/metrics"))
                 .andExpect(status().isUnauthorized());
@@ -266,6 +281,10 @@ class AuthSecurityIntegrationTest {
                 }
         );
         return body.get("accessToken").toString();
+    }
+
+    private Set<String> responseCodes(JsonNode paths, String path) {
+        return Set.copyOf(paths.path(path).path("post").path("responses").propertyNames());
     }
 
     private void insertUser(String username, String password, String role, UUID principalId) {
