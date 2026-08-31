@@ -5,6 +5,9 @@ import io.github.jackdaw16.learningplatform.catalog.application.CourseService;
 import io.github.jackdaw16.learningplatform.catalog.application.CreateCourseCommand;
 import io.github.jackdaw16.learningplatform.catalog.application.UpdateCourseCommand;
 import io.github.jackdaw16.learningplatform.shared.Money;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +40,11 @@ public class CourseController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Course created",
+            content = @Content(schema = @Schema(implementation = CourseResponse.class))
+    )
     public ResponseEntity<CourseResponse> create(@Valid @RequestBody CourseRequest request) {
         ownershipAuthorization.requireCourseCreation(request.instructorId());
         return ResponseEntity.status(HttpStatus.CREATED)

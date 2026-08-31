@@ -39,6 +39,9 @@ public class EnrollmentPaymentConfirmedService {
 
         Enrollment enrollment = enrollmentRepository.findByIdForUpdate(event.enrollmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Enrollment", event.enrollmentId()));
+        if (enrollment.status() == EnrollmentStatus.CANCELLED) {
+            return;
+        }
         if (enrollment.status() != EnrollmentStatus.PENDING_PAYMENT) {
             throw new IllegalStateException("only pending payment enrollments can be activated");
         }

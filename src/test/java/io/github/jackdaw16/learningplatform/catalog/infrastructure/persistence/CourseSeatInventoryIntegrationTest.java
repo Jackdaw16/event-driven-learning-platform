@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -38,6 +39,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class CourseSeatInventoryIntegrationTest {
 
     private static final int CONCURRENT_WORKERS = 8;

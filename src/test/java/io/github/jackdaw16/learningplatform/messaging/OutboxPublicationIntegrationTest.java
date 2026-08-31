@@ -22,6 +22,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -31,6 +32,7 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 @SpringBootTest(properties = "messaging.outbox.poll-interval=1h")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OutboxPublicationIntegrationTest {
 
     private static final long RECEIVE_TIMEOUT_MILLIS = 5_000;

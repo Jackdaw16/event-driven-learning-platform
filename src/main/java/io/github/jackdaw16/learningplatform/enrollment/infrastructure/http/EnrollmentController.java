@@ -6,6 +6,10 @@ import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollm
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCancellationService;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCreationService;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentProgressService;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -40,6 +44,18 @@ public class EnrollmentController {
 
     @PostMapping("/api/students/{studentId}/enrollments")
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Enrollment and payment created",
+                    content = @Content(schema = @Schema(implementation = EnrollmentCreationResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Idempotent enrollment replay",
+                    content = @Content(schema = @Schema(implementation = EnrollmentCreationResponse.class))
+            )
+    })
     public ResponseEntity<EnrollmentCreationResponse> create(
             @PathVariable UUID studentId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,

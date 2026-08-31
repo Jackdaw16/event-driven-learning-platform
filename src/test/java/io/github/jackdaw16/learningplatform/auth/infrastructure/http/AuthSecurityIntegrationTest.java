@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -32,6 +34,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(properties = {
@@ -39,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
         "management.health.rabbit.enabled=false"
 })
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AuthSecurityIntegrationTest {
 
     @Container
@@ -221,6 +225,47 @@ class AuthSecurityIntegrationTest {
                 .andExpect(jsonPath("$.status").value("UP"));
     }
 
+    @Test
+    void documentationIsPublicAndTokenIssuanceIsExcludedFromBearerSecurity() throws Exception {
+        mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/v3/api-docs.yaml"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.bearerFormat").value("JWT"))
+                .andExpect(jsonPath("$.security[0].bearerAuth").isArray())
+                .andExpect(jsonPath("$.paths['/api/auth/token'].post.security").isEmpty());
+    }
+
+    @Test
+    void generatedOpenApiDocumentsCreationResponseCodes() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/categories"));
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/instructors"));
+        assertEquals(Set.of("201"), responseCodes(paths, "/api/courses"));
+        assertEquals(Set.of("200", "201"), responseCodes(paths, "/api/students/{studentId}/enrollments"));
+    }
+
+    @Test
+    void metricsRequireAnAdministratorAndAreAvailableThroughActuator() throws Exception {
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/actuator/metrics")
+                        .header("Authorization", "Bearer " + tokenFor("admin", "admin-pass")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.names").isArray());
+    }
+
     private String tokenFor(String username, String password) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -236,6 +281,10 @@ class AuthSecurityIntegrationTest {
                 }
         );
         return body.get("accessToken").toString();
+    }
+
+    private Set<String> responseCodes(JsonNode paths, String path) {
+        return Set.copyOf(paths.path(path).path("post").path("responses").propertyNames());
     }
 
     private void insertUser(String username, String password, String role, UUID principalId) {

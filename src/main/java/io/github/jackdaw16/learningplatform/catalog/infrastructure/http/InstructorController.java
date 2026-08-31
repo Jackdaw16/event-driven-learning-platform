@@ -1,6 +1,9 @@
 package io.github.jackdaw16.learningplatform.catalog.infrastructure.http;
 
 import io.github.jackdaw16.learningplatform.catalog.application.InstructorService;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +34,11 @@ public class InstructorController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Instructor created",
+            content = @Content(schema = @Schema(implementation = InstructorResponse.class))
+    )
     public ResponseEntity<InstructorResponse> create(@Valid @RequestBody InstructorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(InstructorResponse.from(instructorService.create(request.name(), request.email(), request.biography())));

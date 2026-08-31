@@ -4,6 +4,7 @@ import io.github.jackdaw16.learningplatform.auth.application.AuthenticationResul
 import io.github.jackdaw16.learningplatform.auth.application.AuthenticationService;
 import io.github.jackdaw16.learningplatform.auth.application.IssuedToken;
 import io.github.jackdaw16.learningplatform.auth.application.JwtTokenService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +24,7 @@ public class AuthController {
     }
 
     @PostMapping("/token")
+    @SecurityRequirements
     public TokenResponse issueToken(@Valid @RequestBody TokenRequest request) {
         AuthenticationResult result = authenticationService.authenticate(request.username(), request.password());
         IssuedToken token = jwtTokenService.issue(result.username(), result.role(), result.principalId());
