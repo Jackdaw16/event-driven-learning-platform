@@ -14,6 +14,7 @@ import io.github.jackdaw16.learningplatform.catalog.domain.CourseLevel;
 import io.github.jackdaw16.learningplatform.catalog.domain.Instructor;
 import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollmentCommand;
 import io.github.jackdaw16.learningplatform.enrollment.application.CreateEnrollmentResult;
+import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCancellationService;
 import io.github.jackdaw16.learningplatform.enrollment.application.EnrollmentCreationService;
 import io.github.jackdaw16.learningplatform.enrollment.domain.EnrollmentStatus;
 import io.github.jackdaw16.learningplatform.messaging.EnrollmentCreatedEventV1;
@@ -87,6 +88,9 @@ class PaymentWorkflowIntegrationTest {
 
     @Autowired
     private EnrollmentCreationService enrollmentCreationService;
+
+    @Autowired
+    private EnrollmentCancellationService enrollmentCancellationService;
 
     @Autowired
     private CategoryRepository categoryRepository;
@@ -194,6 +198,46 @@ class PaymentWorkflowIntegrationTest {
         assertEquals(0, occupiedSeats(result.enrollment().courseId()));
         assertEquals(3, processedEventCount());
         assertEquals(2, outboxCount());
+    }
+
+    @Test
+    void cancellationBeforeDelayedPaymentProcessingKeepsConfirmedPaymentAndCancelledEnrollment() {
+        CreateEnrollmentResult result = createEnrollment();
+        paymentProcessor.setOutcome(PaymentOutcome.CONFIRMED);
+
+        enrollmentCancellationService.cancel(result.enrollment().id());
+        publishUntil(() -> processedEventCount() == 2);
+
+        assertEquals(PaymentStatus.CONFIRMED, paymentStatus(result.payment().id()));
+        assertEquals(EnrollmentStatus.CANCELLED, enrollmentStatus(result.enrollment().id()));
+        assertEquals(0, occupiedSeats(result.enrollment().courseId()));
+        assertEquals(0, queueMessageCount(RabbitTopology.ENROLLMENT_PAYMENT_CONFIRMED_DLQ));
+    }
+
+    @Test
+    void cancellationAfterPaymentConfirmationAcknowledgesDelayedActivationWithoutReleasingTwice() {
+        CreateEnrollmentResult result = createEnrollment();
+        markPaymentStatus(result.payment().id(), PaymentStatus.CONFIRMED);
+
+        enrollmentCancellationService.cancel(result.enrollment().id());
+        PaymentConfirmedEventV1 delayedEvent = new PaymentConfirmedEventV1(
+                new EventMetadataV1(
+                        UUID.randomUUID(),
+                        PaymentConfirmedEventV1.EVENT_TYPE,
+                        PaymentConfirmedEventV1.VERSION,
+                        Instant.now()
+                ),
+                result.payment().id(),
+                result.enrollment().id()
+        );
+        rabbitTemplate.send(RabbitTopology.EVENTS_EXCHANGE, RabbitTopology.PAYMENT_CONFIRMED_ROUTING_KEY,
+                messageFor(delayedEvent));
+
+        await(() -> processedEventCount() == 1);
+        assertEquals(PaymentStatus.CONFIRMED, paymentStatus(result.payment().id()));
+        assertEquals(EnrollmentStatus.CANCELLED, enrollmentStatus(result.enrollment().id()));
+        assertEquals(0, occupiedSeats(result.enrollment().courseId()));
+        assertEquals(0, queueMessageCount(RabbitTopology.ENROLLMENT_PAYMENT_CONFIRMED_DLQ));
     }
 
     @Test
