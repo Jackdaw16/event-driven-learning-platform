@@ -1,6 +1,9 @@
 package io.github.jackdaw16.learningplatform.catalog.infrastructure.http;
 
 import io.github.jackdaw16.learningplatform.catalog.application.CategoryService;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +34,11 @@ public class CategoryController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @ApiResponse(
+            responseCode = "201",
+            description = "Category created",
+            content = @Content(schema = @Schema(implementation = CategoryResponse.class))
+    )
     public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(CategoryResponse.from(categoryService.create(request.name(), request.description())));
